@@ -2,17 +2,24 @@ package canter.test_assignment;
 
 import canter.test_assignment.entity.Product;
 import canter.test_assignment.entity.Products;
+import com.google.common.util.concurrent.RateLimiter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.util.StopWatch;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,6 +27,8 @@ import java.util.stream.Collectors;
 public class TestAssignmentApplication implements CommandLineRunner {
 
 	WebClient client = WebClient.create("https://dummyjson.com");
+	WebClient webClient = WebClient.create();
+	RateLimiter limiter = RateLimiter.create(10);
 
 	public static void main(String[] args) {
 		SpringApplication.run(TestAssignmentApplication.class, args);
@@ -51,7 +60,12 @@ public class TestAssignmentApplication implements CommandLineRunner {
 			}
 		});
 
-		System.out.println("Bye!");
+		StopWatch watch = new StopWatch();
+		watch.start();
+		products.stream().parallel().forEach(this::savePics);
+		watch.stop();
+
+		System.out.println("Bye! ");
 	}
 
 	private Mono<Products> getProducts(String request) {
@@ -63,7 +77,7 @@ public class TestAssignmentApplication implements CommandLineRunner {
 
 	public void createCSVFile(List<Product> products, String category) throws IOException {
 		FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
-		try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.EXCEL.withHeader("ID", "TITLE", "DESCRIPTION", "BRAND"))) {
+		try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader("ID", "TITLE", "DESCRIPTION", "BRAND"))) {
 			products.stream().sorted(Comparator.comparing(Product::getTitle)).forEach(product -> {
 				try {
 					printer.printRecord(product.getId(), product.getTitle(), product.getDescription(), product.getBrand());
@@ -72,5 +86,20 @@ public class TestAssignmentApplication implements CommandLineRunner {
 				}
 			});
 		}
+	}
+
+	private void savePics(Product product) {
+
+		product.getImages().stream().filter(image -> !image.endsWith("thumbnail")).forEach(image -> {
+			String suffix = image.substring(image.lastIndexOf(".") + 1);
+			String name = image.substring(image.lastIndexOf("/") + 1, image.lastIndexOf("."));
+			Path path = Paths.get(String.format("../pics/%d_%s_%s.%s", product.getId(),
+					product.getTitle().replace('/', '-'),
+					name, suffix));
+
+			limiter.acquire();
+			Flux<DataBuffer> dataBufferFlux = webClient.get().uri(image).retrieve().bodyToFlux(DataBuffer.class);
+			DataBufferUtils.write(dataBufferFlux, path, StandardOpenOption.CREATE).block();
+		});
 	}
 }
