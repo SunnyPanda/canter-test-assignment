@@ -9,7 +9,8 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
-    int id;
-    int age;
+public class CollectionEntity {
+    int total;
+    int skip;
+    int limit;
 }

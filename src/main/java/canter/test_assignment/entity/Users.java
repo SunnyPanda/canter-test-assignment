@@ -11,9 +11,6 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Users {
-    List<User> users;
-    int total;
-    int skip;
-    int limit;
+public class Users extends CollectionEntity {
+    List<SingleUser> users;
 }

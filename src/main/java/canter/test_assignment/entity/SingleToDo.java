@@ -7,7 +7,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class ToDo {
+public class SingleToDo {
     int id;
     String todo;
     String completed;

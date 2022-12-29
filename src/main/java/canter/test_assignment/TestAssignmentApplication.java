@@ -1,6 +1,6 @@
 package canter.test_assignment;
 
-import canter.test_assignment.entity.Product;
+import canter.test_assignment.entity.SingleProduct;
 import canter.test_assignment.entity.Products;
 import canter.test_assignment.entity.ToDos;
 import canter.test_assignment.entity.Users;
@@ -29,7 +29,7 @@ public class TestAssignmentApplication implements CommandLineRunner {
 
 	WebClient client = WebClient.create("https://dummyjson.com");
 	WebClient webClient = WebClient.create();
-	RateLimiter limiter = RateLimiter.create(10);
+	RateLimiter limiter = RateLimiter.create(5);
 
 	public static void main(String[] args) {
 		SpringApplication.run(TestAssignmentApplication.class, args);
@@ -44,7 +44,7 @@ public class TestAssignmentApplication implements CommandLineRunner {
 			requests.add(String.format("/products?limit=%d&skip=%d", 10, i));
 		}
 
-		List<Product> products = Objects.requireNonNull(Flux.fromIterable(requests)
+		List<SingleProduct> singleProducts = Objects.requireNonNull(Flux.fromIterable(requests)
 						.flatMap(this::getProducts)
 						.collectList()
 						.block())
@@ -52,7 +52,7 @@ public class TestAssignmentApplication implements CommandLineRunner {
 				.flatMap(products1 -> products1.getProducts().stream())
 				.toList();
 
-		Map<String, List<Product>> map = products.stream().collect(Collectors.groupingBy(Product::getCategory));
+		Map<String, List<SingleProduct>> map = singleProducts.stream().collect(Collectors.groupingBy(SingleProduct::getCategory));
 		map.forEach((category, products2) -> {
 			try {
 				createCSVFile(products2, category);
@@ -61,7 +61,7 @@ public class TestAssignmentApplication implements CommandLineRunner {
 			}
 		});
 
-		products.stream().parallel().forEach(this::savePics);
+		singleProducts.stream().parallel().forEach(this::savePics);
 
 		fetchToDos();
 
@@ -89,11 +89,11 @@ public class TestAssignmentApplication implements CommandLineRunner {
 						.collectList()
 						.block())
 				.stream()
-				.filter(toDos2 -> toDos2.getTotal() > 0)
 				.flatMap(toDos2 -> toDos2.getTodos().stream())
 				.forEach(System.out::println);
 	}
 
+	// 1
 	private Mono<ToDos> getTodos(String request) {
 		return client.get()
 				.uri(request)
@@ -113,13 +113,14 @@ public class TestAssignmentApplication implements CommandLineRunner {
 				.retrieve()
 				.bodyToMono(Products.class);
 	}
+	// 1
 
-	public void createCSVFile(List<Product> products, String category) throws IOException {
+	public void createCSVFile(List<SingleProduct> singleProducts, String category) throws IOException {
 		FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
 		try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader("ID", "TITLE", "DESCRIPTION", "BRAND"))) {
-			products.stream().sorted(Comparator.comparing(Product::getTitle)).forEach(product -> {
+			singleProducts.stream().sorted(Comparator.comparing(SingleProduct::getTitle)).forEach(singleProduct -> {
 				try {
-					printer.printRecord(product.getId(), product.getTitle(), product.getDescription(), product.getBrand());
+					printer.printRecord(singleProduct.getId(), singleProduct.getTitle(), singleProduct.getDescription(), singleProduct.getBrand());
 				} catch (IOException e) {
 					throw new RuntimeException("MISTAAAAAAKE!2");
 				}
@@ -127,13 +128,13 @@ public class TestAssignmentApplication implements CommandLineRunner {
 		}
 	}
 
-	private void savePics(Product product) {
+	private void savePics(SingleProduct singleProduct) {
 
-		product.getImages().stream().filter(image -> !image.endsWith("thumbnail")).forEach(image -> {
+		singleProduct.getImages().forEach(image -> {
 			String suffix = image.substring(image.lastIndexOf(".") + 1);
 			String name = image.substring(image.lastIndexOf("/") + 1, image.lastIndexOf("."));
-			Path path = Paths.get(String.format("../pics/%d_%s_%s.%s", product.getId(),
-					product.getTitle().replace('/', '-'),
+			Path path = Paths.get(String.format("../pics/%d_%s_%s.%s", singleProduct.getId(),
+					singleProduct.getTitle().replace('/', '-'),
 					name, suffix));
 
 			limiter.acquire();

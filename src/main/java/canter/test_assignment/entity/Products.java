@@ -11,15 +11,6 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Products {
-
-    List<Product> products;
-    int total;
-    int skip;
-    int limit;
-
-    @Override
-    public String toString() {
-        return products.stream().map(Product::toString).reduce((s1, s2) -> String.format("%s\n%s\n", s1, s2)).toString();
-    }
+public class Products extends CollectionEntity {
+    List<SingleProduct> products;
 }

@@ -9,7 +9,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class Product {
+public class SingleProduct {
 
     int id;
     String title;
