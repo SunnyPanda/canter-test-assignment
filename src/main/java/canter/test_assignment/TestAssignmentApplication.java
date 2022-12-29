@@ -2,6 +2,8 @@ package canter.test_assignment;
 
 import canter.test_assignment.entity.Product;
 import canter.test_assignment.entity.Products;
+import canter.test_assignment.entity.ToDos;
+import canter.test_assignment.entity.Users;
 import com.google.common.util.concurrent.RateLimiter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -10,7 +12,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
-import org.springframework.util.StopWatch;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -60,14 +61,52 @@ public class TestAssignmentApplication implements CommandLineRunner {
 			}
 		});
 
-		StopWatch watch = new StopWatch();
-		watch.start();
 		products.stream().parallel().forEach(this::savePics);
-		watch.stop();
 
-		System.out.println("Bye! ");
+		fetchToDos();
+
+		System.out.println("Bye!");
 	}
 
+	private void fetchToDos() {
+		List<String> requests = new ArrayList<>();
+		for (int i = 0; i < 100; i += 20) {
+			requests.add(String.format("/users?limit=%d&skip=%d&select=age", 20, i));
+		}
+
+		List<String> users = Objects.requireNonNull(Flux.fromIterable(requests)
+						.flatMap(this::getUsers)
+						.collectList()
+						.block())
+				.stream()
+				.flatMap(users1 -> users1.getUsers().stream())
+				.filter(user -> user.getAge() >= 40)
+				.map(user -> String.format("/users/%d/todos", user.getId()))
+				.toList();
+
+		Objects.requireNonNull(Flux.fromIterable(users)
+						.flatMap(this::getTodos)
+						.collectList()
+						.block())
+				.stream()
+				.filter(toDos2 -> toDos2.getTotal() > 0)
+				.flatMap(toDos2 -> toDos2.getTodos().stream())
+				.forEach(System.out::println);
+	}
+
+	private Mono<ToDos> getTodos(String request) {
+		return client.get()
+				.uri(request)
+				.retrieve()
+				.bodyToMono(ToDos.class);
+	}
+
+	private Mono<Users> getUsers(String request) {
+		return client.get()
+				.uri(request)
+				.retrieve()
+				.bodyToMono(Users.class);
+	}
 	private Mono<Products> getProducts(String request) {
 		return client.get()
 				.uri(request)
