@@ -31,13 +31,13 @@ public class FetchingService {
         List<SingleProduct> allProducts = connector.getProducts();
         System.out.println("Products fetched.");
 
-        System.out.println("Creating CSV files...");
+        System.out.println("Creating CSV files in resources folder...");
         allProducts.stream()
                 .collect(Collectors.groupingBy(SingleProduct::getCategory))
                 .forEach((category, products) -> createCSVFile(products, category));
         System.out.println("CSV files created.");
 
-        System.out.println("Download pictures...");
+        System.out.println("Download pictures into resources folder...");
         RateLimiter limiter = RateLimiter.create(10);
         allProducts.stream().parallel().forEach(product -> savePics(product, limiter));
         System.out.println("Pictures downloaded.");
@@ -54,7 +54,7 @@ public class FetchingService {
     }
 
     private void createCSVFile(List<SingleProduct> products, String category) {
-        try (FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
+        try (FileWriter out = new FileWriter(String.format("src/main/resources/%s.csv", category));
              CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader(Headers.class))) {
             products.stream().sorted(Comparator.comparing(SingleProduct::getTitle)).forEach(product -> {
                 try {
@@ -71,8 +71,8 @@ public class FetchingService {
     private void savePics(SingleProduct product, RateLimiter limiter) {
         product.getImages().forEach(image -> {
             limiter.acquire();
-            DataBufferUtils.write(connector.getPictureData(image), createPath(image, "../pics/%d_%s_%s.%s", product),
-                    StandardOpenOption.CREATE).block();
+            DataBufferUtils.write(connector.getPictureData(image), createPath(image, "src/main/resources/%d_%s_%s.%s",
+                            product), StandardOpenOption.CREATE).block();
         });
     }
 
