@@ -1,6 +1,7 @@
 package canter.test_assignment;
 
 import canter.test_assignment.entity.*;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -45,6 +46,13 @@ public class Connector {
                 .stream()
                 .flatMap(toDos -> toDos.getTodos().stream())
                 .toList();
+    }
+
+    public Flux<DataBuffer> getPictureData(String link) {
+        return client.get()
+                .uri(link)
+                .retrieve()
+                .bodyToFlux(DataBuffer.class);
     }
 
     private List<String> createUri(String uri, int limit, int skip, int max) {

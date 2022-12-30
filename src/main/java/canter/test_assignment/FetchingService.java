@@ -4,11 +4,8 @@ import canter.test_assignment.entity.SingleProduct;
 import com.google.common.util.concurrent.RateLimiter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -22,9 +19,6 @@ import java.util.stream.Collectors;
 @Component
 public class FetchingService {
 
-    private WebClient webClient = WebClient.create();
-    private RateLimiter limiter = RateLimiter.create(5);
-
     private final Connector connector;
 
     public FetchingService(Connector connector) {
@@ -37,7 +31,8 @@ public class FetchingService {
                 .collect(Collectors.groupingBy(SingleProduct::getCategory))
                 .forEach((category, products) -> createCSVFile(products, category));
 
-        allProducts.stream().parallel().forEach(this::savePics);
+        RateLimiter limiter = RateLimiter.create(10);
+        allProducts.stream().parallel().forEach(product -> savePics(product, limiter));
     }
 
     public void fetchToDos() {
@@ -49,33 +44,35 @@ public class FetchingService {
         connector.getToDos(toDosLinks).forEach(System.out::println);
     }
 
-    public void createCSVFile(List<SingleProduct> singleProducts, String category) {
+    public void createCSVFile(List<SingleProduct> products, String category) {
         try (FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
-             CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader("ID", "TITLE", "DESCRIPTION", "BRAND"))) {
-            singleProducts.stream().sorted(Comparator.comparing(SingleProduct::getTitle)).forEach(singleProduct -> {
+             CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader(Headers.class))) {
+            products.stream().sorted(Comparator.comparing(SingleProduct::getTitle)).forEach(product -> {
                 try {
-                    printer.printRecord(singleProduct.getId(), singleProduct.getTitle(), singleProduct.getDescription(), singleProduct.getBrand());
+                    printer.printRecord(product.getId(), product.getTitle(), product.getDescription(), product.getBrand());
                 } catch (IOException e) {
-                    throw new RuntimeException("MISTAAAAAAKE!2");
+                    System.out.printf("Couldn't create the file for category %s. Please, repeat the action%n", category);
                 }
             });
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            System.out.println("Something went wrong during the downloading process. Please, repeat the action");
         }
     }
 
-    private void savePics(SingleProduct singleProduct) {
-
-        singleProduct.getImages().forEach(image -> {
-            String suffix = image.substring(image.lastIndexOf(".") + 1);
-            String name = image.substring(image.lastIndexOf("/") + 1, image.lastIndexOf("."));
-            Path path = Paths.get(String.format("../pics/%d_%s_%s.%s", singleProduct.getId(),
-                    singleProduct.getTitle().replace('/', '-'),
-                    name, suffix));
-
+    private void savePics(SingleProduct product, RateLimiter limiter) {
+        product.getImages().forEach(image -> {
             limiter.acquire();
-            Flux<DataBuffer> dataBufferFlux = webClient.get().uri(image).retrieve().bodyToFlux(DataBuffer.class);
-            DataBufferUtils.write(dataBufferFlux, path, StandardOpenOption.CREATE).block();
+            DataBufferUtils.write(connector.getPictureData(image), createPath(image, "../pics/%d_%s_%s.%s", product),
+                    StandardOpenOption.CREATE).block();
         });
+    }
+
+    private Path createPath(String link, String dir, SingleProduct product) {
+        int dotIndex = link.lastIndexOf(".");
+        String suffix = link.substring( dotIndex + 1);
+        String name = link.substring(link.lastIndexOf("/") + 1, dotIndex);
+        return Paths.get(String.format(dir, product.getId(),
+                product.getTitle().replace('/', '-'),
+                name, suffix));
     }
 }
