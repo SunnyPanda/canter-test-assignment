@@ -4,6 +4,8 @@ import canter.test_assignment.entity.SingleProduct;
 import com.google.common.util.concurrent.RateLimiter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -20,11 +22,14 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Scanner;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
 public class TestAssignmentApplication implements CommandLineRunner {
 
+	private static Logger log = LoggerFactory
+			.getLogger(TestAssignmentApplication.class);
 	private WebClient webClient = WebClient.create();
 	private RateLimiter limiter = RateLimiter.create(5);
 
@@ -41,12 +46,25 @@ public class TestAssignmentApplication implements CommandLineRunner {
 
 	@Override
 	public void run(String... args) {
-		System.out.println("Hi!");
+		log.info("Hi");
 
-//		fetchProducts();
-		fetchToDos();
+		Scanner in = new Scanner(System.in);
 
-		System.out.println("Bye!");
+		System.out.println("Please, choose an action: 1 - download products, 2 - download 2Dos, 3 - exit");
+		String action = in.nextLine();
+		while (true) {
+			switch (action) {
+				case "1" -> fetchProducts();
+				case "2" -> fetchToDos();
+				case "3" -> {
+					log.info("Bye!");
+					System.exit(0);
+				}
+				default -> System.out.println("Wrong action, please, try another number");
+			}
+			System.out.println("\nPlease, choose an action: 1 - download products, 2 - download 2Dos, 3 - exit");
+			action = in.nextLine();
+		}
 	}
 
 	private void fetchProducts() {
