@@ -7,6 +7,7 @@ import canter.test_assignment.entity.Users;
 import com.google.common.util.concurrent.RateLimiter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -27,9 +28,16 @@ import java.util.stream.Collectors;
 @SpringBootApplication
 public class TestAssignmentApplication implements CommandLineRunner {
 
-	WebClient client = WebClient.create("https://dummyjson.com");
-	WebClient webClient = WebClient.create();
-	RateLimiter limiter = RateLimiter.create(5);
+	private WebClient client = WebClient.create("https://dummyjson.com");
+	private WebClient webClient = WebClient.create();
+	private RateLimiter limiter = RateLimiter.create(5);
+
+	private final Connector connector;
+
+	@Autowired
+	public TestAssignmentApplication(Connector connector) {
+		this.connector = connector;
+	}
 
 	public static void main(String[] args) {
 		SpringApplication.run(TestAssignmentApplication.class, args);
@@ -39,33 +47,19 @@ public class TestAssignmentApplication implements CommandLineRunner {
 	public void run(String... args) {
 		System.out.println("Hi!");
 
-		List<String> requests = new ArrayList<>();
-		for (int i = 0; i < 100; i += 10) {
-			requests.add(String.format("/products?limit=%d&skip=%d", 10, i));
-		}
-
-		List<SingleProduct> singleProducts = Objects.requireNonNull(Flux.fromIterable(requests)
-						.flatMap(this::getProducts)
-						.collectList()
-						.block())
-				.stream()
-				.flatMap(products1 -> products1.getProducts().stream())
-				.toList();
-
-		Map<String, List<SingleProduct>> map = singleProducts.stream().collect(Collectors.groupingBy(SingleProduct::getCategory));
-		map.forEach((category, products2) -> {
-			try {
-				createCSVFile(products2, category);
-			} catch (IOException e) {
-				throw new RuntimeException("MISTAAAAAAKE!1");
-			}
-		});
-
-		singleProducts.stream().parallel().forEach(this::savePics);
-
+		fetchProducts();
 		fetchToDos();
 
 		System.out.println("Bye!");
+	}
+
+	private void fetchProducts() {
+		List<SingleProduct> allProducts = connector.getProducts();
+		allProducts.stream()
+				.collect(Collectors.groupingBy(SingleProduct::getCategory))
+				.forEach((category, products) -> createCSVFile(products, category));
+
+		allProducts.stream().parallel().forEach(this::savePics);
 	}
 
 	private void fetchToDos() {
@@ -107,17 +101,11 @@ public class TestAssignmentApplication implements CommandLineRunner {
 				.retrieve()
 				.bodyToMono(Users.class);
 	}
-	private Mono<Products> getProducts(String request) {
-		return client.get()
-				.uri(request)
-				.retrieve()
-				.bodyToMono(Products.class);
-	}
 	// 1
 
-	public void createCSVFile(List<SingleProduct> singleProducts, String category) throws IOException {
-		FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
-		try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader("ID", "TITLE", "DESCRIPTION", "BRAND"))) {
+	public void createCSVFile(List<SingleProduct> singleProducts, String category) {
+		try (FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
+			 CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader("ID", "TITLE", "DESCRIPTION", "BRAND"))) {
 			singleProducts.stream().sorted(Comparator.comparing(SingleProduct::getTitle)).forEach(singleProduct -> {
 				try {
 					printer.printRecord(singleProduct.getId(), singleProduct.getTitle(), singleProduct.getDescription(), singleProduct.getBrand());
@@ -125,6 +113,8 @@ public class TestAssignmentApplication implements CommandLineRunner {
 					throw new RuntimeException("MISTAAAAAAKE!2");
 				}
 			});
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
 	}
 
