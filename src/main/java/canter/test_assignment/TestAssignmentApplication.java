@@ -1,9 +1,6 @@
 package canter.test_assignment;
 
 import canter.test_assignment.entity.SingleProduct;
-import canter.test_assignment.entity.Products;
-import canter.test_assignment.entity.ToDos;
-import canter.test_assignment.entity.Users;
 import com.google.common.util.concurrent.RateLimiter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -15,20 +12,19 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
 public class TestAssignmentApplication implements CommandLineRunner {
 
-	private WebClient client = WebClient.create("https://dummyjson.com");
 	private WebClient webClient = WebClient.create();
 	private RateLimiter limiter = RateLimiter.create(5);
 
@@ -47,7 +43,7 @@ public class TestAssignmentApplication implements CommandLineRunner {
 	public void run(String... args) {
 		System.out.println("Hi!");
 
-		fetchProducts();
+//		fetchProducts();
 		fetchToDos();
 
 		System.out.println("Bye!");
@@ -63,45 +59,13 @@ public class TestAssignmentApplication implements CommandLineRunner {
 	}
 
 	private void fetchToDos() {
-		List<String> requests = new ArrayList<>();
-		for (int i = 0; i < 100; i += 20) {
-			requests.add(String.format("/users?limit=%d&skip=%d&select=age", 20, i));
-		}
-
-		List<String> users = Objects.requireNonNull(Flux.fromIterable(requests)
-						.flatMap(this::getUsers)
-						.collectList()
-						.block())
-				.stream()
-				.flatMap(users1 -> users1.getUsers().stream())
+		List<String> toDosLinks = connector.getUsers().stream()
 				.filter(user -> user.getAge() >= 40)
-				.map(user -> String.format("/users/%d/todos", user.getId()))
+				.map(user -> String.format(Connector.TODOS_URI, user.getId()))
 				.toList();
 
-		Objects.requireNonNull(Flux.fromIterable(users)
-						.flatMap(this::getTodos)
-						.collectList()
-						.block())
-				.stream()
-				.flatMap(toDos2 -> toDos2.getTodos().stream())
-				.forEach(System.out::println);
+		connector.getToDos(toDosLinks).forEach(System.out::println);
 	}
-
-	// 1
-	private Mono<ToDos> getTodos(String request) {
-		return client.get()
-				.uri(request)
-				.retrieve()
-				.bodyToMono(ToDos.class);
-	}
-
-	private Mono<Users> getUsers(String request) {
-		return client.get()
-				.uri(request)
-				.retrieve()
-				.bodyToMono(Users.class);
-	}
-	// 1
 
 	public void createCSVFile(List<SingleProduct> singleProducts, String category) {
 		try (FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
