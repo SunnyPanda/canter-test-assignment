@@ -1,6 +1,7 @@
 package canter.test_assignment;
 
 import canter.test_assignment.entity.SingleProduct;
+import canter.test_assignment.entity.SingleToDo;
 import com.google.common.util.concurrent.RateLimiter;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -26,13 +27,20 @@ public class FetchingService {
     }
 
     public void fetchProducts() {
+        System.out.println("Fetch products...");
         List<SingleProduct> allProducts = connector.getProducts();
+        System.out.println("Products fetched.");
+
+        System.out.println("Creating CSV files...");
         allProducts.stream()
                 .collect(Collectors.groupingBy(SingleProduct::getCategory))
                 .forEach((category, products) -> createCSVFile(products, category));
+        System.out.println("CSV files created.");
 
+        System.out.println("Download pictures...");
         RateLimiter limiter = RateLimiter.create(10);
         allProducts.stream().parallel().forEach(product -> savePics(product, limiter));
+        System.out.println("Pictures downloaded.");
     }
 
     public void fetchToDos() {
@@ -41,10 +49,11 @@ public class FetchingService {
                 .map(user -> String.format(Connector.TODOS_URI, user.getId()))
                 .toList();
 
-        connector.getToDos(toDosLinks).forEach(System.out::println);
+        connector.getToDos(toDosLinks).stream().sorted(Comparator.comparing(SingleToDo::getUserId))
+                .forEach(System.out::println);
     }
 
-    public void createCSVFile(List<SingleProduct> products, String category) {
+    private void createCSVFile(List<SingleProduct> products, String category) {
         try (FileWriter out = new FileWriter(String.format("../csv/%s.csv", category));
              CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT.withHeader(Headers.class))) {
             products.stream().sorted(Comparator.comparing(SingleProduct::getTitle)).forEach(product -> {
